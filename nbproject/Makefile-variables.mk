@@ -6,8 +6,8 @@
 CND_BASEDIR=`pwd`
 # default configuration
 CND_ARTIFACT_DIR_default=dist/default/production
-CND_ARTIFACT_NAME_default=skim.X.production.hex
-CND_ARTIFACT_PATH_default=dist/default/production/skim.X.production.hex
+CND_ARTIFACT_NAME_default=trunk.production.hex
+CND_ARTIFACT_PATH_default=dist/default/production/trunk.production.hex
 CND_PACKAGE_DIR_default=${CND_DISTDIR}/default/package
-CND_PACKAGE_NAME_default=skim.x.tar
-CND_PACKAGE_PATH_default=${CND_DISTDIR}/default/package/skim.x.tar
+CND_PACKAGE_NAME_default=trunk.tar
+CND_PACKAGE_PATH_default=${CND_DISTDIR}/default/package/trunk.tar

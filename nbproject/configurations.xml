@@ -7,6 +7,7 @@
       <itemPath>uart.h</itemPath>
       <itemPath>global.h</itemPath>
       <itemPath>ui.h</itemPath>
+      <itemPath>sx8724.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -18,13 +19,14 @@
       <itemPath>main.c</itemPath>
       <itemPath>uart.c</itemPath>
       <itemPath>interrupt.c</itemPath>
+      <itemPath>sx8724.c</itemPath>
+      <itemPath>ui.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
                    projectFiles="false">
       <itemPath>Makefile</itemPath>
     </logicalFolder>
-    <itemPath>ui.c</itemPath>
   </logicalFolder>
   <sourceRootList>
     <Elem>.</Elem>
