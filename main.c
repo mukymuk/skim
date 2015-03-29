@@ -2,6 +2,7 @@
 #include "uart.h"
 #include "ui.h"
 #include "cmd.h"
+#include "sx8724.h"
 
 #pragma config 	XINST = OFF 		// no extended instructions
 #pragma config 	STVREN = ON 		// stack overflow causes reset
@@ -33,6 +34,7 @@ int main(int argc, char** argv)
     uart_init();
     ui_init();
     sx8724_init();
+    cmd_init();
     
 	INTCONbits.PEIE = 1;
 	INTCONbits.GIE = 1;

@@ -1,11 +1,24 @@
 #include "global.h"
+#include <stdlib.h>
 
 #define TX_BUFFER_SIZE	128
+#define RX_BUFFER_SIZE	128
 
 static uint8_t s_tx_buffer[TX_BUFFER_SIZE];
+
 static volatile uint8_t s_tx_write_ndx = 0;
 static volatile uint8_t s_tx_read_ndx = 0;
 static volatile uint8_t s_tx_count = 0;
+
+static uint8_t s_rx_buffer[RX_BUFFER_SIZE];
+static volatile uint8_t s_rx_write_ndx = 0;
+static volatile uint8_t s_rx_read_ndx = 0;
+static volatile uint8_t s_rx_count = 0;
+
+static uint8_t  s_eol;
+static uint8_t  s_escape;
+static bit      s_escaping;
+static uint8_t  s_eol_count;
 
 void uart_init( void )
 {
@@ -65,8 +78,70 @@ void uart_tx( const void * pv_data, uint8_t length )
     PIE3bits.TX2IE = 1;
 }
 
+
+void uart_set_escape( uint8_t eol, uint8_t escape )
+{
+    // set eol == escape to disable escaping
+    s_eol = eol;
+    s_escape = escape;
+}
+
+uint8_t uart_getmsg( void * pv_msg, uint8_t length )
+{
+    uint8_t * p_msg = (uint8_t*)pv_msg;
+    uint8_t i;
+    if( s_eol_count )
+    {
+        PIE3bits.RC2IE = 0;
+        length = min(length,s_rx_count);
+        for(i=0;i<length;i++)
+        {
+            p_msg[i] = s_rx_buffer[ s_rx_read_ndx++ ];
+            if( s_rx_read_ndx >= RX_BUFFER_SIZE )
+            {
+                s_rx_read_ndx = 0;
+            }
+        }
+        s_rx_count -= length;
+        s_eol_count--;
+        PIE3bits.RC2IE = 1;
+    }
+    else
+    {
+        length = 0;
+    }
+    return length;
+}
+
+
 void uart_isr( void )
 {
+    if( PIR3bits.RC2IF )
+    {
+        uint8_t c = RCREG2;
+        if( !s_escaping && c == s_eol )
+        {
+            s_eol_count++;
+        }
+        else if( !s_escaping && c == s_escape )
+        {
+            s_escaping = true;
+        }
+        else if( s_rx_count < RX_BUFFER_SIZE )
+        {
+            s_rx_buffer[ s_rx_write_ndx++ ] = c;
+            s_rx_count++;
+            if( s_rx_write_ndx >= RX_BUFFER_SIZE )
+            {
+                s_rx_write_ndx = 0;
+            }
+            s_escaping = false;
+        }
+        else
+        {
+            while(1);   // rx buffer overrun is a fatal condition
+        }
+    }
     if( PIR3bits.TX2IF )
     {
         if( s_tx_count )
@@ -81,6 +156,6 @@ void uart_isr( void )
         else
         {
             TXSTA2bits.TXEN = 0;
-       }
+        }
     }
 }
