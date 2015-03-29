@@ -1,5 +1,6 @@
 #include "global.h"
 #include "sx8724.h"
+#include <string.h>
 
 // 5.8PSI full scase = 100mV max
 // Vref = 1.19/1.22/1.25
@@ -23,6 +24,31 @@ enum state_i2c_t
     state_i2c_restart,
     state_i2c_stop
 };
+
+struct gain_offset_t
+{
+    uint8_t reserved1 : 4;
+    uint8_t pga3_enable : 1;
+    uint8_t pga2_enable : 1;
+    uint8_t pga1_enable : 1;
+    uint8_t adc_enable : 1;
+    uint8_t setfs : 2;
+    uint8_t pga2_gain : 2;
+    uint8_t pga2_offset : 4;
+    uint8_t pga1_gain : 1;
+    uint8_t pga3_gain : 7;
+    uint8_t reserved2 : 1;
+    uint8_t pga3_offset : 7;
+};
+struct channel_t
+{
+    float                   pga3_gain;
+    struct gain_offset_t    gain_offset;
+
+};
+
+#define SX8724_CHANNEL_COUNT    3
+static struct channel_t s_channel[SX8724_CHANNEL_COUNT];
 
 static enum state_i2c_t     s_state_i2c;
 static enum state_t         s_state;
@@ -51,7 +77,6 @@ static bool s_interrupt_pending = false;
 #define SX8724_I2C_RESET_ADDR       0x00
 #define SX8724_REG_RESET            0x06
 
-#define SX8724_CHANNEL_COUNT    3
 
 static inline uint8_t read_byte( void )
 {
@@ -117,6 +142,13 @@ void sx8724_reset( void )
     // resets the SX8724
     uint8_t data = SX8724_REG_RESET;
     tx(SX8724_I2C_RESET_ADDR,TRANSACTION_WRITE,&data,sizeof(data));
+    memset(s_channel,0,sizeof(s_channel));
+    for(uint8_t i=0;i<ARRAY_SIZE(s_channel);i++)
+    {
+        struct channel_t * p = &s_channel[i];
+        p->pga3_gain = 1.0;
+        p->gain_offset.pga3_gain = 12;
+    }
 }
 void sx8724_init( void )
 {
@@ -157,25 +189,6 @@ void sx8724_start( void )
 
 }
 
-struct gain_offset_t
-{
-    uint8_t reserved1 : 4;
-    uint8_t pga3_enable : 1;
-    uint8_t pga2_enable : 1;
-    uint8_t pga1_enable : 1;
-    uint8_t adc_enable : 1;
-    uint8_t setfs : 2;
-    uint8_t pga2_gain : 2;
-    uint8_t pga2_offset : 4;
-    uint8_t pga1_gain : 1;
-    uint8_t pga3_gain : 7;
-    uint8_t reserved2 : 1;
-    uint8_t pga3_offset : 7;
-};
-
-
-static struct gain_offset_t s_gain_offset[SX8724_CHANNEL_COUNT];
-
 #define PGA3_MAX_GAIN   10.58
 #define PGA2_MAX_GAIN   10.0
 #define PGA1_MAX_GAIN   10.0
@@ -186,14 +199,14 @@ struct pga2_offset_t
     float   offset;
 };
 
-void sx8724_gain_offset( uint8_t channel, float * p_gain, float *p_offset )
+float sx8724_gain( uint8_t channel, float gain )
 {
-    static const float pga2_gains[3] = { 2.0, 5.0, 10.0 };
+   
     uint8_t i = 0;
-    float out_offset, offset = *p_offset;
-    float out_gain = 1.0, pga3_gain, g, gain = *p_gain;
-    struct gain_offset_t *p_channel = (struct gain_offset_t*)&s_gain_offset[channel];
+    float out_gain = 1.0, original_gain = gain;
+    struct gain_offset_t *p_channel = (struct gain_offset_t*)&s_channel[channel].gain_offset;
 
+    // clamp maximum gain
     if( gain > (PGA3_MAX_GAIN*PGA2_MAX_GAIN*PGA1_MAX_GAIN) )
         gain = (PGA3_MAX_GAIN*PGA2_MAX_GAIN*PGA1_MAX_GAIN);
     
@@ -201,44 +214,82 @@ void sx8724_gain_offset( uint8_t channel, float * p_gain, float *p_offset )
     {
         // pga1 is required
         p_channel->pga1_enable = 1;
-        p_channel->pga1_gain = 1; // G=10
+        p_channel->pga1_gain = 1; // G = 10.0 only
+        out_gain = 10.0;
         gain /= 10.0;
-        out_gain *= 10.0;
     }
-    if( gain > PGA3_MAX_GAIN)
+    else
+    {
+        // pga1 is not required
+        p_channel->pga1_enable = 0;
+        p_channel->pga1_gain = 0;   // G = 1.0
+    }
+    if( gain > PGA3_MAX_GAIN )
     {
         // pga2 is required
-        g = gain / PGA3_MAX_GAIN;   // g is minimum gain required from pga2
+        static const float pga2_gains[3] = { 2.0, 5.0, 10.0 }; // list of gains pga2 is capable of
+        uint8_t pga2_gain_ndx = 0;
+        float pga2_min_gain =  gain / PGA3_MAX_GAIN;   // minimum gain required from pga2
         p_channel->pga2_enable = 1;
-        while( g > pga2_gains[i] )
-            i++;
-        p_channel->pga2_gain = i+1;
-        gain /= pga2_gains[i];
-        out_gain *= pga2_gains[i];
+        while( pga2_min_gain > pga2_gains[pga2_gain_ndx] )
+            pga2_gain_ndx++;
+        p_channel->pga2_gain = pga2_gain_ndx+1;
+        gain /= pga2_gains[pga2_gain_ndx];
+        out_gain *= pga2_gains[pga2_gain_ndx];
     }
-    p_channel->pga3_enable = 1;  // PGA3 is always enabled
-    pga3_gain = round(gain*12.0)/12.0;
-    p_channel->pga3_gain = (uint8_t)(pga3_gain*12.0);
-    out_gain *= pga3_gain;
-    *p_gain = out_gain;
+    else
+    {
+        // pga2 is not required
+        p_channel->pga2_enable = 0;
+        p_channel->pga2_gain = 0; // G = 1.0
+    }
+   
+    if( gain != 1.0 || p_channel->pga1_enable==0 && p_channel->pga2_enable==0)
+    {
+        // pga3 is required if gain isn't unity or if both of the other pga's are
+        // not enabled.  At least one pga must be enabled in order to satisfy
+        // adc input impedance requirements.
+        p_channel->pga3_enable = 1;
+        s_channel[channel].pga3_gain = round(out_gain*12.0)/12.0;
+        p_channel->pga3_gain = ((uint8_t)s_channel[channel].pga3_gain)*12;
+        out_gain *= s_channel[channel].pga3_gain;
+    }
+    else
+    {
+        // pga3 isn't required
+        p_channel->pga3_enable = 0;
+        p_channel->pga3_gain = 12;  // G = 1.0
+    }
+    // return the system gain coef for this channel
+    return original_gain / out_gain;
+}
+
+float sx8724_offset( uint8_t channel, float offset )
+{
+    // sx8724_gain() should be called before this function
+    // because offsets depend on gain settings
+    struct gain_offset_t *p_channel = (struct gain_offset_t*)&s_channel[channel].gain_offset;
+    float pga3_gain = s_channel[channel].pga3_gain;
+    
     uint8_t pga_offset;
 
     
-    float pga2_offset =  round(offset/(pga3_gain*0.2));
-    float pga3_offset = round((offset-pga2_offset)/12);
+    float pga2_offset =  round(5.0*offset/pga3_gain);
+    float pga3_offset = round((offset-pga2_offset)/12.0);
 
-    if( !p_channel->pga2_enable && pga2_offset != 0.0 )
+    if( p_channel->pga2_enable==0 && pga2_offset != 0.0 )
     {
         // turn pga2 on and set gain to 1 if we only need its
         // contribution to offset
         p_channel->pga2_enable = 1;
         p_channel->pga2_gain = 0;
     }
-    pga_offset = (uint8_t)(pga2_offset/pga3_gain/0.2);
+    pga_offset = (uint8_t)(5.0*pga2_offset/pga3_gain);
     p_channel->pga2_offset = ((~(pga_offset & 0x07) + 1) & 0x0F);  // 2's compliment to sign+magnitude format
     pga_offset = (uint8_t)(pga3_offset/12);
     p_channel->pga3_offset = ((~(pga_offset & 0x3F) + 1) & 0x7F);  // 2's compliment to sign+magnitude format
-    *p_offset = pga2_offset * pga3_gain + pga3_offset;
+    // return the system offset coef for this channel
+    return offset - (pga2_offset * pga3_gain + pga3_offset);
 }
 
 void sx8724_i2c_isr( void )

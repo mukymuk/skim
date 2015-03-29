@@ -1,7 +1,7 @@
 #include "global.h"
 #include "uart.h"
 #include "ui.h"
-#include "sx8724.h"
+#include "cmd.h"
 
 #pragma config 	XINST = OFF 		// no extended instructions
 #pragma config 	STVREN = ON 		// stack overflow causes reset
@@ -38,9 +38,6 @@ int main(int argc, char** argv)
 	INTCONbits.GIE = 1;
     __delay_ms(2);
     uart_tx( "Test\r\n", 6 );
-    float gain = 13.5;
-    float offset = 0.575;
-    sx8724_gain_offset(0,&gain,&offset);
     while(1)
     {
         //uart_putchar('7');

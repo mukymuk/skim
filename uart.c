@@ -46,7 +46,7 @@ void uart_tx( const void * pv_data, uint8_t length )
     {
         *p = *p_data;
         len--;
-        if( ++s_tx_write_ndx <  TX_BUFFER_SIZE )
+        if( ++s_tx_write_ndx < TX_BUFFER_SIZE )
         {
             p++;
         }
