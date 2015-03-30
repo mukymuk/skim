@@ -1,7 +1,8 @@
 #include "global.h"
 #include "protocol.h"
 #include "cmd.h"
-#include <stdarg.h>
+#include "uart.h"
+
 
 static union skim_rsp_t s_response_buffer;
 
@@ -48,4 +49,9 @@ uint8_t cmd_dispatch( const void *pv_cmd )
         response_len = nak(skim_rsp_nak_unknown_command);
     }
     return response_len;
+}
+
+void cmd_process( void )
+{
+
 }

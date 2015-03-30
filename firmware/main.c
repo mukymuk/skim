@@ -39,7 +39,6 @@ int main(int argc, char** argv)
 	INTCONbits.PEIE = 1;
 	INTCONbits.GIE = 1;
     __delay_ms(2);
-    uart_tx( "Test\r\n", 6 );
     while(1)
     {
         //uart_putchar('7');
