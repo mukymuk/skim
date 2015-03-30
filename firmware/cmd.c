@@ -1,5 +1,5 @@
 #include "global.h"
-#include "skim_cmd.h"
+#include "protocol.h"
 #include "cmd.h"
 #include <stdarg.h>
 

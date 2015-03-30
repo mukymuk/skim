@@ -19,6 +19,8 @@ static uint8_t  s_eol;
 static uint8_t  s_escape;
 static bit      s_escaping;
 static uint8_t  s_eol_count;
+static uint8_t  s_rx_msg_size;
+static uint8_t s_rx_msg_ndx;
 
 void uart_init( void )
 {
@@ -121,7 +123,12 @@ void uart_isr( void )
         uint8_t c = RCREG2;
         if( !s_escaping && c == s_eol )
         {
-            s_eol_count++;
+            if( s_rx_msg_size )
+            {
+                s_rx_buffer[ s_rx_msg_ndx ] = s_rx_msg_size;
+                s_eol_count++;
+                s_rx_msg_size = 0;
+            }
         }
         else if( !s_escaping && c == s_escape )
         {
@@ -129,6 +136,9 @@ void uart_isr( void )
         }
         else if( s_rx_count < RX_BUFFER_SIZE )
         {
+            if( !s_rx_msg_size )
+                s_rx_msg_ndx = s_rx_write_ndx;
+            s_rx_msg_size++;
             s_rx_buffer[ s_rx_write_ndx++ ] = c;
             s_rx_count++;
             if( s_rx_write_ndx >= RX_BUFFER_SIZE )

@@ -8,8 +8,8 @@
       <itemPath>global.h</itemPath>
       <itemPath>ui.h</itemPath>
       <itemPath>sx8724.h</itemPath>
-      <itemPath>skim_cmd.h</itemPath>
       <itemPath>cmd.h</itemPath>
+      <itemPath>../protocol/protocol.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -33,6 +33,7 @@
   </logicalFolder>
   <sourceRootList>
     <Elem>.</Elem>
+    <Elem>../protocol</Elem>
   </sourceRootList>
   <projectmakefile>Makefile</projectmakefile>
   <confs>
@@ -72,7 +73,7 @@
       <HI-TECH-COMP>
         <property key="asmlist" value="true"/>
         <property key="define-macros" value=""/>
-        <property key="extra-include-directories" value=""/>
+        <property key="extra-include-directories" value="..\protocol"/>
         <property key="identifier-length" value="255"/>
         <property key="operation-mode" value="pro"/>
         <property key="opt-xc8-compiler-strict_ansi" value="false"/>
