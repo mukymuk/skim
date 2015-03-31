@@ -91,8 +91,29 @@ void uart_tx( uint8_t data )
     PIE3bits.TX2IE = 1;
 }
 
+bool uart_rx( uint8_t *p_data )
+{
+    bool ret;
+    PIE3bits.RC2IE = 0;
+    if( s_rx_count )
+    {
+        *p_data = s_rx_buffer[ s_rx_read_ndx++ ];
+        if( s_rx_read_ndx >= RX_BUFFER_SIZE )
+        {
+            s_rx_read_ndx = 0;
+        }
+        s_rx_count--;
+        ret = true;
+    }
+    else
+    {
+        ret = false;
+    }
+    PIE3bits.RC2IE = 1;
+    return ret;
+}
 
-uint8_t uart_rx( void * pv_msg, uint8_t max_length )
+uint8_t uart_rx_buf( void * pv_msg, uint8_t max_length )
 {
     uint8_t length;
     uint8_t * p_msg = (uint8_t*)pv_msg;

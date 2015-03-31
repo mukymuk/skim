@@ -1,52 +1,78 @@
 
-struct skim_rsp_version_t
+enum skim_client_id_t
 {
-    uint8_t major;
-    uint8_t minor;
+    skim_client_id_nak,
 };
 
-struct skim_rsp_gain_offset_t
+enum skim_host_id_t
 {
-    uint8_t     channel;
-    uint24_t    gain;
-    uint24_t    offset;
+    skim_host_id_version,
+    skim_host_id_gain,
+    skim_host_id_offset
 };
 
-enum skim_rsp_nak_code_t
+struct skim_client_header_t
 {
-    skim_rsp_nak_unknown_command,
-    skim_rsp_nak_invalid_argument
+    enum skim_client_id_t   id;
+    uint8_t                 length;
+   
 };
 
-struct skim_rsp_nak_t
+struct skim_host_header_t
 {
-    enum skim_rsp_nak_code_t code;
+    enum skim_host_id_t     id;
+    uint8_t                 length;
+   
 };
 
-union skim_rsp_t
+struct skim_client_version_t
 {
-    struct skim_rsp_version_t       version;
-    struct skim_rsp_nak_t           nak;
-    struct skim_rsp_gain_offset_t   gain_offset;
+    struct skim_client_header_t    hdr;
+    uint8_t                 major;
+    uint8_t                 minor;
+    uint16_t                crc;
 };
 
-
-union skim_cmd_t
+struct skim_host_version_t
 {
+    struct skim_host_header_t    hdr;
+    uint16_t                crc;
 };
 
-
-enum skim_cmd_id_t
+struct skim_host_gain_offset_t
 {
-    skim_cmd_id_version,
-    skim_cmd_id_gain,
-    skim_cmd_id_offset
+    struct skim_host_header_t    hdr;
+    uint8_t                 channel;
+    uint24_t                gain;
+    uint24_t                offset;
+    uint16_t                crc;
 };
 
-enum skim_rsp_id_t
+enum skim_client_nak_code_t
 {
-    skim_rsp_id_nak,
-    skim_rsp_id_gain,
-    skim_rsp_id_offset
+    skim_nak_unknown_command,
+    skim_nak_invalid_argument
 };
+
+struct skim_client_nak_t
+{
+    struct skim_client_header_t                hdr;
+    enum skim_client_nak_code_t         code;
+    uint16_t                            crc;
+};
+
+union skim_host_t
+{
+    struct skim_host_header_t                hdr;
+    struct skim_host_version_t          version;
+    struct skim_host_gain_offset_t      gain_offset;
+};
+
+union skim_client_t
+{
+    struct skim_client_header_t                hdr;
+    struct skim_client_nak_t            nak;
+    struct skim_client_version_t        version;
+};
+
 

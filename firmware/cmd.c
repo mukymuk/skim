@@ -4,54 +4,91 @@
 #include "uart.h"
 
 
-static union skim_rsp_t s_response_buffer;
+enum state_t
+{
+    state_idle,
+    state_rx_id,
+    state_rx_length,
+    state_rx_data,
+    state_rx_crc
+};
+
+static enum state_t         s_state;
+static union skim_host_t    s_rx_buffer;
+static union skim_client_t  s_tx_buffer;
 
 void cmd_init( void )
 {
 }
 
-static uint8_t nak( enum skim_rsp_nak_t code )
+static uint8_t nak( enum skim_client_nak_code_t code )
 {
-    struct skim_rsp_nak_t * p_nak = &s_response_buffer.nak;
+    struct skim_client_nak_t * p_nak = &s_tx_buffer.nak;
     p_nak->code = code;
-    return sizeof(struct skim_rsp_nak_t); 
+    return sizeof(struct skim_client_nak_t); 
 }
 
-static uint8_t get_version( const void *pv_args )
+
+static uint8_t get_version( void )
 {
-    struct skim_rsp_version_t * p_version = &s_response_buffer.version;
+    struct skim_client_version_t * p_version = &s_tx_buffer.version;
     p_version->major = 0;
     p_version->minor = 1;
-    return sizeof(struct skim_rsp_version_t);
+    return sizeof(struct skim_client_version_t);
 }
 
-static uint8_t get_gain_offset( const void *pv_args )
+struct dispatch_table_t
 {
-}
-
-
-uint8_t cmd_dispatch( const void *pv_cmd )
-{
-    static uint8_t (* const s_dispatch_table[])(const void *) =
-    {
-        get_version,        // skim_cmd_id_version
-        get_gain_offset,    // skim_cmd_id_gain
-    };
-    uint8_t response_len;
-    const uint8_t * p_cmd = (const uint8_t *)pv_cmd;
-    uint8_t cmd_id = *p_cmd;
-    if( cmd_id < ARRAY_SIZE(s_dispatch_table) )
-    {
-        response_len = s_dispatch_table[cmd_id](&p_cmd[1]);
-    }
-    else
-    {
-        response_len = nak(skim_rsp_nak_unknown_command);
-    }
-    return response_len;
-}
+    uint8_t (*p_func)(void);
+    uint8_t length;
+};
 
 void cmd_process( void )
 {
+    static const struct dispatch_table_t s_dispatch_table[] =
+    {
+        { get_version, sizeof(struct skim_client_version_t) }
+    };
+    uint8_t ret, c;
+    if( !uart_rx(&c) )
+        return;
+ redo:
+    switch( s_state )
+    {
+        case state_rx_id:
+        {
+            if( c < ARRAY_SIZE(s_dispatch_table))
+            {
+                // valid dispatch id
+                s_state = state_rx_length;
+                s_rx_buffer.hdr.id = (enum skim_host_id_t)c;
+            }
+            break;
+        }
+        case state_rx_length:
+        {
+            if( c == s_dispatch_table[s_rx_buffer.hdr.id].length )
+            {
+                // validate length
+                s_state = state_rx_data;
+            }
+            else
+            {
+                s_state = state_rx_id;
+                goto redo;
+            }
+            break;
+        }
+        case state_rx_data:
+        {
+            break;
+        }
+        case state_rx_crc:
+        {
+            break;
+        }
+        default:
+            break;
+    }
 
 }
