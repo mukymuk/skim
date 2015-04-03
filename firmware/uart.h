@@ -5,3 +5,4 @@ void uart_tx( uint8_t data );
 void uart_isr( void );
 uint8_t uart_rx_buf( void * pv_msg, uint8_t max_length );
 bool uart_rx( uint8_t *p_data );
+uint16_t uart_get_timeout( void );

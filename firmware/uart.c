@@ -1,4 +1,5 @@
 #include "global.h"
+#include "tmr.h"
 #include <stdlib.h>
 
 #define TX_BUFFER_SIZE	128
@@ -16,6 +17,7 @@ static volatile uint8_t s_rx_read_ndx = 0;
 static volatile uint8_t s_rx_count = 0;
 
 static uint8_t  s_rx_overflow;
+static uint16_t s_last_rx_time;
 
 void uart_init( void )
 {
@@ -140,12 +142,17 @@ uint8_t uart_rx_buf( void * pv_msg, uint8_t max_length )
     return length;
 }
 
+uint16_t uart_get_timeout( void )
+{
+    return tmr_getms()-s_last_rx_time;
+}
 
 void uart_isr( void )
 {
     if( PIR3bits.RC2IF )
     {
         uint8_t c = RCREG2;
+        s_last_rx_time = tmr_getms_isr();
         if( s_rx_count < RX_BUFFER_SIZE )
         {
             s_rx_buffer[ s_rx_write_ndx++ ] = c;

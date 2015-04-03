@@ -1,0 +1,1 @@
+uint16_t crc16(void *pv_data, uint8_t length);

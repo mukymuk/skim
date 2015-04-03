@@ -2,7 +2,7 @@
 #include "protocol.h"
 #include "cmd.h"
 #include "uart.h"
-
+#include "crc.h"
 
 enum state_t
 {
@@ -16,6 +16,11 @@ enum state_t
 static enum state_t         s_state;
 static union skim_host_t    s_rx_buffer;
 static union skim_client_t  s_tx_buffer;
+static uint8_t *            s_rx_data;
+static uint8_t              s_rx_data_ndx;
+static uint8_t              s_rx_data_count;
+static uint16_t             s_cmd_good_count;
+static uint16_t             s_cmd_bad_count;
 
 void cmd_init( void )
 {
@@ -29,30 +34,37 @@ static uint8_t nak( enum skim_client_nak_code_t code )
 }
 
 
-static uint8_t get_version( void )
+static void get_version( void )
 {
     struct skim_client_version_t * p_version = &s_tx_buffer.version;
     p_version->major = 0;
     p_version->minor = 1;
-    return sizeof(struct skim_client_version_t);
 }
 
 struct dispatch_table_t
 {
-    uint8_t (*p_func)(void);
+    void (*p_func)(void);
     uint8_t length;
 };
 
 void cmd_process( void )
 {
+    uint8_t c;
     static const struct dispatch_table_t s_dispatch_table[] =
     {
         { get_version, sizeof(struct skim_client_version_t) }
     };
-    uint8_t ret, c;
     if( !uart_rx(&c) )
+    {
+        if( uart_get_timeout() >= 10 )
+        {
+            // restart the state machine if there's more than 10ms between
+            // characters
+            s_state = state_rx_id;
+        }
         return;
- redo:
+    }
+redo:
     switch( s_state )
     {
         case state_rx_id:
@@ -67,10 +79,15 @@ void cmd_process( void )
         }
         case state_rx_length:
         {
-            if( c == s_dispatch_table[s_rx_buffer.hdr.id].length )
+            uint8_t length = s_dispatch_table[s_rx_buffer.hdr.id].length;
+            if( length && c == length )
             {
                 // validate length
+                s_rx_data = (uint8_t*)&s_rx_buffer.hdr.crc;
+                s_rx_buffer.hdr.length = c;
+                s_rx_data_count = c + sizeof(s_rx_buffer.hdr.crc);
                 s_state = state_rx_data;
+                s_rx_data_ndx = 0;
             }
             else
             {
@@ -81,14 +98,25 @@ void cmd_process( void )
         }
         case state_rx_data:
         {
-            break;
-        }
-        case state_rx_crc:
-        {
+            if( s_rx_data_count )
+            {
+                s_rx_data[s_rx_data_ndx++] = c;
+                if( !--s_rx_data_count )
+                {
+                    // validate crc
+                    if( crc16(&s_rx_buffer,s_rx_buffer.hdr.length) == s_rx_buffer.hdr.crc )
+                    {
+                        s_dispatch_table[s_rx_buffer.hdr.id].p_func();
+                        s_cmd_good_count++;
+                    }
+                    else
+                        s_cmd_bad_count++;
+                    s_state = state_rx_id;
+                }
+            }
             break;
         }
         default:
             break;
     }
-
 }

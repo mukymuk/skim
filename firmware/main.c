@@ -3,6 +3,7 @@
 #include "ui.h"
 #include "cmd.h"
 #include "sx8724.h"
+#include "tmr.h"
 
 #pragma config 	XINST = OFF 		// no extended instructions
 #pragma config 	STVREN = ON 		// stack overflow causes reset
@@ -27,15 +28,18 @@ void sleep( void )
 int main(int argc, char** argv) 
 {
     bool on = 0;
+    
     TRISAbits.TRISA4 = 1;
     OSCCON = 0b01110000;
     OSCTUNEbits.PLLEN = 1;
-    
+
+    tmr_init();
     uart_init();
     ui_init();
     sx8724_init();
     cmd_init();
     
+            
 	INTCONbits.PEIE = 1;
 	INTCONbits.GIE = 1;
     __delay_ms(2);
@@ -43,6 +47,7 @@ int main(int argc, char** argv)
     {
         //uart_putchar('7');
         ui_led_top_white(on);
+        cmd_process();
         on = !on;
         sleep();
     }
