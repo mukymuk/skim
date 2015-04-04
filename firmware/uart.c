@@ -46,12 +46,12 @@ void uart_putchar( const char c )
     PIE3bits.TX2IE = 1;
 }
 
-void uart_tx_buf( const void * pv_data, uint8_t length )
+uint8_t uart_tx_buf( const void * pv_data, uint8_t length )
 {
-    uint8_t len = length;
+    uint8_t len;
     const uint8_t *p_data = (const uint8_t *)pv_data;
     uint8_t * p;
-    while( length > TX_BUFFER_SIZE-s_tx_count );
+    len = min(length, TX_BUFFER_SIZE-s_tx_count );
     PIE3bits.TX2IE = 0;
     p = &s_tx_buffer[ s_tx_write_ndx ];
     while( len )
@@ -75,6 +75,7 @@ void uart_tx_buf( const void * pv_data, uint8_t length )
     }
     s_tx_count += length;
     PIE3bits.TX2IE = 1;
+    return len;
 }
 
 void uart_tx( uint8_t data )
@@ -93,8 +94,10 @@ void uart_tx( uint8_t data )
     PIE3bits.TX2IE = 1;
 }
 
-bool uart_rx( uint8_t *p_data )
+uint8_t uart_rx( uint8_t *p_data )
 {
+    // returns number of bytes received + number of bytes dropped due
+    // to rx overflow
     bool ret;
     PIE3bits.RC2IE = 0;
     if( s_rx_count )
@@ -105,12 +108,13 @@ bool uart_rx( uint8_t *p_data )
             s_rx_read_ndx = 0;
         }
         s_rx_count--;
-        ret = true;
+        ret = 1 + s_rx_overflow;
     }
     else
     {
-        ret = false;
+        ret = s_rx_overflow;
     }
+    s_rx_overflow = 0;
     PIE3bits.RC2IE = 1;
     return ret;
 }
@@ -119,10 +123,10 @@ uint8_t uart_rx_buf( void * pv_msg, uint8_t max_length )
 {
     uint8_t length;
     uint8_t * p_msg = (uint8_t*)pv_msg;
+    PIE3bits.RC2IE = 0;
     if( s_rx_count )
     {
         uint8_t i;
-        PIE3bits.RC2IE = 0;
         length = min(max_length,s_rx_count);
         for(i=0;i<length;i++)
         {
@@ -133,12 +137,18 @@ uint8_t uart_rx_buf( void * pv_msg, uint8_t max_length )
             }
         }
         s_rx_count -= length;
-        PIE3bits.RC2IE = 1;
+        length = min(max_length-length,s_rx_overflow);
+        for(;i<length;i++)
+        {
+            // pad out bytes that were dropped
+            p_msg[i] = 0xFF;
+        }
     }
     else
     {
         length = 0;
     }
+    PIE3bits.RC2IE = 1;
     return length;
 }
 
@@ -147,6 +157,17 @@ uint16_t uart_get_timeout( void )
     return tmr_getms()-s_last_rx_time;
 }
 
+static bool s_break;
+
+bool uart_break_detected( void )
+{
+    bool ret;
+    PIE3bits.RC2IE = 0;
+    ret = s_break;
+    s_break = false;
+    PIE3bits.RC2IE = 1;
+    return ret;
+}
 void uart_isr( void )
 {
     if( PIR3bits.RC2IF )

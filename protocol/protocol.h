@@ -1,75 +1,60 @@
 
-enum skim_client_id_t
+////////////////////////////////////////////////////////////////////////////////
+// DATA TYPES
+
+typedef uint8_t protocol_id_t;
+typedef uint8_t protocol_length_t;
+typedef uint16_t protocol_crc_t;
+#ifdef PROTOCOL_ENABLE_SEQUENCE
+typedef PROTOCOL_ENABLE_SEQUENCE protocol_sequence_t;
+#endif    
+
+////////////////////////////////////////////////////////////////////////////////
+// PACKET COMMON
+
+typedef struct _protocol_header_t
 {
-    skim_client_id_nak,
-};
+    protocol_id_t       id;
+    protocol_length_t   length;
+#ifdef PROTOCOL_ENABLE_SEQUENCE
+    protocol_sequence_t sequence;
+#endif    
+}
+protocol_header_t;
 
-enum skim_host_id_t
+typedef struct _protocol_nodata_t
 {
-    skim_host_id_version,
-    skim_host_id_gain,
-    skim_host_id_offset
-};
+    protocol_header_t           hdr;
+    protocol_crc_t              crc;
+}
+protocol_nodata_t;
 
-struct skim_client_header_t
+////////////////////////////////////////////////////////////////////////////////
+// ID'S
+
+#define PROTOCOL_ID_VERSION    ((protocol_id_t)0)
+
+////////////////////////////////////////////////////////////////////////////////
+// ACK/NAK PACKET
+
+typedef struct _protocol_ack_t
 {
-    enum skim_client_id_t   id;
-    uint8_t                 length;
-    uint16_t                crc;
-};
+    protocol_header_t           hdr;
+    uint8_t                     code;
+    protocol_crc_t              crc;
+}
+protocol_ack_t;
 
-struct skim_host_header_t
+////////////////////////////////////////////////////////////////////////////////
+// VERSION PACKET
+
+typedef protocol_nodata_t   protocol_version_request_t;
+
+typedef struct _protocol_version_response_t
 {
-    enum skim_host_id_t     id;
-    uint8_t                 length;
-    uint16_t                crc;
-};
-
-struct skim_client_version_t
-{
-    struct skim_client_header_t    hdr;
-    uint8_t                 major;
-    uint8_t                 minor;
-};
-
-struct skim_host_version_t
-{
-    struct skim_host_header_t    hdr;
-};
-
-struct skim_host_gain_offset_t
-{
-    struct skim_host_header_t    hdr;
-    uint8_t                 channel;
-    uint24_t                gain;
-    uint24_t                offset;
-};
-
-enum skim_client_nak_code_t
-{
-    skim_nak_unknown_command,
-    skim_nak_invalid_argument
-};
-
-struct skim_client_nak_t
-{
-    struct skim_client_header_t         hdr;
-    enum skim_client_nak_code_t         code;
-    uint16_t                            crc;
-};
-
-union skim_host_t
-{
-    struct skim_host_header_t                hdr;
-    struct skim_host_version_t          version;
-    struct skim_host_gain_offset_t      gain_offset;
-};
-
-union skim_client_t
-{
-    struct skim_client_header_t                hdr;
-    struct skim_client_nak_t            nak;
-    struct skim_client_version_t        version;
-};
-
-
+    protocol_header_t               hdr;
+    uint8_t                         major;
+    uint8_t                         minor;
+    protocol_crc_t                  crc;
+}
+protocol_version_response_t;

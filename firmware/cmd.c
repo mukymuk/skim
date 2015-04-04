@@ -4,119 +4,103 @@
 #include "uart.h"
 #include "crc.h"
 
-enum state_t
+union rx_packet_buffer_t
 {
-    state_idle,
-    state_rx_id,
-    state_rx_length,
-    state_rx_data,
-    state_rx_crc
+    protocol_header_t               hdr;
+    protocol_version_request_t      version_request;
 };
+union rx_packet_buffer_t s_rx_packet_buffer;
 
-static enum state_t         s_state;
-static union skim_host_t    s_rx_buffer;
-static union skim_client_t  s_tx_buffer;
-static uint8_t *            s_rx_data;
-static uint8_t              s_rx_data_ndx;
-static uint8_t              s_rx_data_count;
-static uint16_t             s_cmd_good_count;
-static uint16_t             s_cmd_bad_count;
+union tx_packet_buffer_t
+{
+    protocol_header_t               hdr;
+    protocol_version_response_t     version_response;
+};
+union tx_packet_buffer_t s_tx_packet_buffer;
+
+static protocol_length_t    s_rx_ndx;
+static protocol_length_t    s_tx_ndx;
+
+typedef void(*dispatch_func_t)(void);
+
+struct dispatch_table_t
+{
+    dispatch_func_t p_func;
+    
+};
+static dispatch_func_t s_pending_dispatch;
+
+// these macros help with packet construction
+#define PACKET(p,n)   protocol_##n##_t * p = &s_tx_packet_buffer.n
+#define CRC16(p)    (p)->crc = crc16(p,sizeof(*(p))-sizeof(protocol_crc_t))
+
 
 void cmd_init( void )
 {
 }
 
-static uint8_t nak( enum skim_client_nak_code_t code )
-{
-    struct skim_client_nak_t * p_nak = &s_tx_buffer.nak;
-    p_nak->code = code;
-    return sizeof(struct skim_client_nak_t); 
-}
-
 
 static void get_version( void )
 {
-    struct skim_client_version_t * p_version = &s_tx_buffer.version;
-    p_version->major = 0;
-    p_version->minor = 1;
+    PACKET(p,version_response);
+    p->major = 0;
+    p->minor = 1;
+    CRC16(p);
 }
-
-struct dispatch_table_t
-{
-    void (*p_func)(void);
-    uint8_t length;
-};
 
 void cmd_process( void )
 {
-    uint8_t c;
+    static uint8_t * const s_p_rx = (uint8_t*)&s_rx_packet_buffer;
+    static uint8_t * const s_p_rx = (uint8_t*)&s_rx_packet_buffer;
+    
     static const struct dispatch_table_t s_dispatch_table[] =
     {
-        { get_version, sizeof(struct skim_client_version_t) }
+        get_version     // PROTOCOL_ID_VERSION
     };
-    if( !uart_rx(&c) )
+    static const uint8_t * const s_p_tx = (const uint8_t*)&s_tx_packet_buffer;
+    bool tx_in_progress = s_tx_ndx < s_tx_packet_buffer.hdr.length;
+    if( tx_in_progress )
     {
-        if( uart_get_timeout() >= 10 )
-        {
-            // restart the state machine if there's more than 10ms between
-            // characters
-            s_state = state_rx_id;
-        }
-        return;
+        // sending transmission packet to uart as uart tx buffers allow
+        s_tx_ndx += uart_tx_buf( &s_p_tx[s_tx_ndx], s_tx_packet_buffer.hdr.length-s_tx_ndx );
     }
-redo:
-    switch( s_state )
+    if( !s_pending_dispatch && s_rx_ndx < sizeof(s_rx_packet_buffer) )
     {
-        case state_rx_id:
+        // collect bytes of incoming packet if there's not a dispatch
+        // pending and there's enough room
+        if( uart_break_detected() )
         {
-            if( c < ARRAY_SIZE(s_dispatch_table))
-            {
-                // valid dispatch id
-                s_state = state_rx_length;
-                s_rx_buffer.hdr.id = (enum skim_host_id_t)c;
-            }
-            break;
+            s_rx_ndx = 0;
         }
-        case state_rx_length:
+        uint8_t bytes_received = uart_rx_buf( &s_p_rx[s_rx_ndx], sizeof(s_rx_packet_buffer)-s_rx_ndx );
+        if( bytes_received )
         {
-            uint8_t length = s_dispatch_table[s_rx_buffer.hdr.id].length;
-            if( length && c == length )
+            s_rx_ndx += bytes_received;
+            if( s_rx_ndx >= sizeof(protocol_header_t) )
             {
-                // validate length
-                s_rx_data = (uint8_t*)&s_rx_buffer.hdr.crc;
-                s_rx_buffer.hdr.length = c;
-                s_rx_data_count = c + sizeof(s_rx_buffer.hdr.crc);
-                s_state = state_rx_data;
-                s_rx_data_ndx = 0;
-            }
-            else
-            {
-                s_state = state_rx_id;
-                goto redo;
-            }
-            break;
-        }
-        case state_rx_data:
-        {
-            if( s_rx_data_count )
-            {
-                s_rx_data[s_rx_data_ndx++] = c;
-                if( !--s_rx_data_count )
+                if( s_rx_packet_buffer.hdr.length == s_rx_ndx )
                 {
-                    // validate crc
-                    if( crc16(&s_rx_buffer,s_rx_buffer.hdr.length) == s_rx_buffer.hdr.crc )
+                    // all of the packet has been received
+                    protocol_crc_t crc = *(protocol_crc_t*)&s_p_rx[s_rx_ndx-sizeof(protocol_crc_t)];
+                    if( crc16(&s_rx_packet_buffer,s_rx_packet_buffer.hdr.length-sizeof(protocol_crc_t)) == crc )
                     {
-                        s_dispatch_table[s_rx_buffer.hdr.id].p_func();
-                        s_cmd_good_count++;
+                        // crc pass
+                        if( s_rx_packet_buffer.hdr.id < ARRAY_SIZE(s_dispatch_table) )
+                        {
+                            // looks like a valid command
+                            s_pending_dispatch = s_dispatch_table[s_rx_packet_buffer.hdr.id].p_func;
+                        }
                     }
-                    else
-                        s_cmd_bad_count++;
-                    s_state = state_rx_id;
                 }
             }
-            break;
         }
-        default:
-            break;
+    }
+    if( s_pending_dispatch && !tx_in_progress )
+    {
+        // transmission buffer is available to be used
+        s_tx_ndx = 0;
+        s_pending_dispatch();
+        s_pending_dispatch = NULL;
+        s_tx_ndx += uart_tx_buf( &s_p_tx[s_tx_ndx], s_tx_packet_buffer.hdr.length-s_tx_ndx );
     }
 }
