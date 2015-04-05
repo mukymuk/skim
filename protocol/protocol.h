@@ -14,8 +14,8 @@ typedef PROTOCOL_ENABLE_SEQUENCE protocol_sequence_t;
 
 typedef struct _protocol_header_t
 {
-    protocol_id_t       id;
     protocol_length_t   length;
+    protocol_id_t       id;
 #ifdef PROTOCOL_ENABLE_SEQUENCE
     protocol_sequence_t sequence;
 #endif    

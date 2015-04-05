@@ -1,4 +1,4 @@
-#include "global.h"
+#include <stdint.h>
 #include "crc.h"
 
 #define POLY 0x8408

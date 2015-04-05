@@ -10,8 +10,8 @@
       <itemPath>sx8724.h</itemPath>
       <itemPath>cmd.h</itemPath>
       <itemPath>../protocol/protocol.h</itemPath>
-      <itemPath>crc.h</itemPath>
       <itemPath>tmr.h</itemPath>
+      <itemPath>../protocol/crc.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -26,8 +26,8 @@
       <itemPath>sx8724.c</itemPath>
       <itemPath>ui.c</itemPath>
       <itemPath>cmd.c</itemPath>
-      <itemPath>crc.c</itemPath>
       <itemPath>tmr.c</itemPath>
+      <itemPath>../protocol/crc.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
