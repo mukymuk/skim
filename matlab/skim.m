@@ -16,10 +16,11 @@ classdef skim < handle
             end
         end
         function obj = skim()
-            [notfound,warnings] = loadlibrary('C:\Users\Shawn\project\skim\trunk\protocol\win\x64\Debug\skim.dll','C:\Users\Shawn\project\skim\trunk\protocol\win\skim.h');
+            [notfound,warnings] = loadlibrary('..\protocol\win\x64\Debug\skim.dll','..\protocol\win\skim.h');
             obj.packet_buffer = libpointer('uint8Ptr',zeros( calllib('skim','get_maximum_packet_size'), 1) );
         end
         function delete(obj)
+            close();
             if libisloaded('skim')
                 unloadlibrary 'skim';
             end
@@ -31,7 +32,7 @@ classdef skim < handle
             fopen(obj.serial_port);
         end
         function close( obj)
-            if ~isempty(obj.serial_port)
+            if ~isempty(obj.serial_port)s
                 fclose( obj.serial_port );
             end
         end
