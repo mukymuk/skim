@@ -14,6 +14,7 @@ typedef union _protocol_packet_buffer_t
 {
 	protocol_header_t			hdr;
 	protocol_version_response_t	version_response;
+	protocol_version_request_t	version_request;
 }
 protocol_packet_buffer_t;
 
