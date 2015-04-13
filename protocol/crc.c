@@ -1,4 +1,4 @@
-#include <stdint.h>
+#include "protocol_config.h"
 #include "crc.h"
 
 #define POLY 0x8408
@@ -22,7 +22,7 @@ uint16_t crc16(void *pv_data, uint8_t length)
 
       do
       {
-            for (i=0, data=(unsigned int)0xff & *p_data++; i < 8; i++, data >>= 1)
+            for (i=0, data=(uint16_t)0xff & *p_data++; i < 8; i++, data >>= 1)
             {
                   if ((crc & 0x0001) ^ (data & 0x0001))
                         crc = (crc >> 1) ^ POLY;

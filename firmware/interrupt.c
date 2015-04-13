@@ -8,4 +8,6 @@ void interrupt isr(void)
     tmr_isr();
     sx8724_i2c_isr();
     uart_isr();
+    INTCONbits.PEIE = 1;
+    INTCONbits.GIE = 1;
 }

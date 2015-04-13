@@ -24,34 +24,38 @@ void uart_init( void )
     PORTGbits.RG1 = 1;
     TRISGbits.TRISG1 = 0;
     TRISGbits.TRISG2 = 1;
-    RCSTA2 = 0b10001000;	// enable serial port
+    RCSTA2 = 0b10010000;	// enable serial port
     BAUDCON2 = 0b00001000;
     SPBRGH2 = 0;
     SPBRG2 = 68;                // BAUDRATE = 2E6/(SPBRG2 + 1) = ~57600
-    TXSTA2 = 0b00000100;	// asynchronous mode
-    //PIE3bits.TX2IE = 1;
-}
+    TXSTA2 = 0b00100100;	// asynchronous mode
 
-void uart_putchar( const char c )
+    PIE3bits.RC2IE = 1;
+}
+static inline void tx(void)
 {
-    while(  s_tx_count >= TX_BUFFER_SIZE );
-    PIE3bits.TX2IE = 0;
-    s_tx_buffer[s_tx_write_ndx++] = c;
-    if( s_tx_write_ndx >= TX_BUFFER_SIZE )
+    if( s_tx_count )
     {
-        s_tx_write_ndx = 0;
+        TXREG2 = s_tx_buffer[ s_tx_read_ndx++ ];
+        if( s_tx_read_ndx >= TX_BUFFER_SIZE )
+        {
+            s_tx_read_ndx = 0;
+        }
+        s_tx_count--;
     }
-    s_tx_count++;
-    TXSTA2bits.TXEN = 1;
-    PIE3bits.TX2IE = 1;
+    else
+    {
+       PIE3bits.TX2IE = 0;
+    }
 }
 
 uint8_t uart_tx_buf( const void * pv_data, uint8_t length )
 {
-    uint8_t len;
+    uint8_t len, tx_count;
     const uint8_t *p_data = (const uint8_t *)pv_data;
     uint8_t * p;
     len = min(length, TX_BUFFER_SIZE-s_tx_count );
+    tx_count = len;
     PIE3bits.TX2IE = 0;
     p = &s_tx_buffer[ s_tx_write_ndx ];
     while( len )
@@ -71,11 +75,15 @@ uint8_t uart_tx_buf( const void * pv_data, uint8_t length )
     }
     if( !s_tx_count )
     {
-        TXSTA2bits.TXEN = 1;
+        s_tx_count += length;
+        tx();
     }
-    s_tx_count += length;
+    else
+    {
+        s_tx_count += length;
+    }
     PIE3bits.TX2IE = 1;
-    return len;
+    return tx_count;
 }
 
 void uart_tx( uint8_t data )
@@ -86,11 +94,12 @@ void uart_tx( uint8_t data )
     s_tx_buffer[ s_tx_write_ndx++ ] = data;
     if( s_tx_write_ndx >= TX_BUFFER_SIZE )
         s_tx_write_ndx = 0;
-    if( !s_tx_count )
+    s_tx_count++;
+    if( !TXSTA2bits.TXEN )
     {
+        tx();
         TXSTA2bits.TXEN = 1;
     }
-    s_tx_count++;
     PIE3bits.TX2IE = 1;
 }
 
@@ -121,7 +130,7 @@ uint8_t uart_rx( uint8_t *p_data )
 
 uint8_t uart_rx_buf( void * pv_msg, uint8_t max_length )
 {
-    uint8_t length;
+    uint8_t length, oflen;
     uint8_t * p_msg = (uint8_t*)pv_msg;
     PIE3bits.RC2IE = 0;
     if( s_rx_count )
@@ -137,8 +146,8 @@ uint8_t uart_rx_buf( void * pv_msg, uint8_t max_length )
             }
         }
         s_rx_count -= length;
-        length = min(max_length-length,s_rx_overflow);
-        for(;i<length;i++)
+        oflen = min(max_length-length,s_rx_overflow);
+        for(;i<oflen;i++)
         {
             // pad out bytes that were dropped
             p_msg[i] = 0xFF;
@@ -188,18 +197,6 @@ void uart_isr( void )
     }
     if( PIR3bits.TX2IF )
     {
-        if( s_tx_count )
-        {
-            TXREG2 = s_tx_buffer[ s_tx_read_ndx++ ];
-            if( s_tx_read_ndx >= TX_BUFFER_SIZE )
-            {
-                s_tx_read_ndx = 0;
-            }
-            s_tx_count--;
-        }
-        else
-        {
-            TXSTA2bits.TXEN = 0;
-        }
+        tx();
     }
 }

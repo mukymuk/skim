@@ -2,7 +2,7 @@
 #include "sx8724.h"
 #include <string.h>
 
-// 5.8PSI full scase = 100mV max
+// 5.8PSI full scale = 100mV max
 // Vref = 1.19/1.22/1.25
 // PGA1 = 10
 // sensor offset = +-25mV
@@ -22,7 +22,8 @@ enum state_i2c_t
     state_i2c_register_value_read,
     state_i2c_register_value_write,
     state_i2c_restart,
-    state_i2c_stop
+    state_i2c_stop,
+    state_i2c_start
 };
 
 struct gain_offset_t
@@ -52,6 +53,7 @@ static struct channel_t s_channel[SX8724_CHANNEL_COUNT];
 
 static enum state_i2c_t     s_state_i2c;
 static enum state_t         s_state;
+static uint8_t               s_i2c_addr;
 
 
 static uint8_t              s_tx_buffer[8];
@@ -78,6 +80,11 @@ static bool s_interrupt_pending = false;
 #define SX8724_REG_RESET            0x06
 
 
+#define SX8724_REG_RCOSC            0x30
+#define SX8724_REG_RCOSC_ENABLE     0x01
+#define SX8724_REG_RCOSC_DISABLE    0x00
+
+
 static inline uint8_t read_byte( void )
 {
     uint8_t byte = s_tx_buffer[s_tx_read_ndx++];
@@ -98,20 +105,15 @@ static inline void xfer_data( void )
 {
     if( s_count )
     {
-        if( !--s_count )
-        {
-           s_state_i2c =  state_i2c_stop;
-        }
+        s_count--;
+    }
+    if( !s_count )
+    {
+        s_state_i2c =  state_i2c_stop;
     }
 }
 
-static inline void start( void )
-{
-    SSP2CON2bits.SEN = 1;
-    s_state_i2c = state_i2c_device_address;
-}
-
-static void tx( uint8_t addr, bool read, const uint8_t *p_data, uint8_t count )
+static void tx( uint8_t reg_addr, bool read, const uint8_t *p_data, uint8_t count )
 {
     uint8_t i;
     while( s_tx_available < (count + 2) )
@@ -120,7 +122,7 @@ static void tx( uint8_t addr, bool read, const uint8_t *p_data, uint8_t count )
         sleep();
     }
     PIE3bits.SSP2IE = 0;
-    write_byte( addr );
+    write_byte(reg_addr);
     write_byte( count | (read ? TRANSACTION_READ : TRANSACTION_WRITE) );
     for(i=0;i<count;i++)
     {
@@ -128,20 +130,18 @@ static void tx( uint8_t addr, bool read, const uint8_t *p_data, uint8_t count )
     }
     if( s_state_i2c == state_i2c_idle )
     {
-        start();
+        SSP2CON2bits.SEN = 1;
+        s_state_i2c = state_i2c_device_address;
     }
     PIE3bits.SSP2IE = 1;
 }
-
-#define SX8724_REG_RCOSC            0x30
-#define SX8724_REG_RCOSC_ENABLE     0x01
-#define SX8724_REG_RCOSC_DISABLE    0x00
 
 void sx8724_reset( void )
 {
     // resets the SX8724
     uint8_t data = SX8724_REG_RESET;
-    tx(SX8724_I2C_RESET_ADDR,TRANSACTION_WRITE,&data,sizeof(data));
+    s_i2c_addr = SX8724_I2C_RESET_ADDR;
+    tx(SX8724_REG_RESET,TRANSACTION_WRITE,NULL,0);
     memset(s_channel,0,sizeof(s_channel));
     for(uint8_t i=0;i<ARRAY_SIZE(s_channel);i++)
     {
@@ -156,7 +156,7 @@ void sx8724_init( void )
     TRISDbits.RD0 = 1;      // interrupt line from adc (pin isn't interrupt capable though...)
     TRISDbits.TRISD5 = 1;   // SDA
     SSP2CON1 = 0b00111000;  // i2c mode
-    SSP2ADD  = 16;          // bitrate = FOSC/(4*(SSP2ADD+1)) <= 400kHz
+    SSP2ADD  = 19;          // bitrate = FOSC/(4*(SSP2ADD+1)) <= 400kHz
     s_tx_available = ARRAY_SIZE(s_tx_buffer);
     s_tx_write_ndx = 0;
     s_tx_read_ndx = 0;
@@ -306,8 +306,9 @@ void sx8724_i2c_isr( void )
             {
                 case state_i2c_device_address:
                 {
-                    SSP2BUF = SX8724_I2C_ADDR | SX8724_I2C_WRITE;
+                    SSP2BUF = s_i2c_addr | SX8724_I2C_WRITE;
                     s_state_i2c = state_i2c_register_address;
+                    s_i2c_addr = SX8724_I2C_ADDR;
                     break;
                 }
                 case state_i2c_register_address:
@@ -315,14 +316,21 @@ void sx8724_i2c_isr( void )
                     SSP2BUF = read_byte();
                     uint8_t count = read_byte();
                     s_count = count & TRANSACTION_COUNT_MASK;
-                    if( (count & TRANSACTION_COUNT_MASK)  == TRANSACTION_WRITE )
+                    if( s_count )
                     {
-                        s_state_i2c = state_i2c_register_value_write;
+                        if( (count & TRANSACTION_COUNT_MASK)  == TRANSACTION_WRITE )
+                        {
+                            s_state_i2c = state_i2c_register_value_write;
+                        }
+                        else
+                        {
+                            s_state_i2c = state_i2c_restart;
+                            SSP2CON2bits.SEN = 1;   // start
+                        }
                     }
                     else
                     {
-                        s_state_i2c = state_i2c_restart;
-                        SSP2CON2bits.SEN = 1;   // start
+                        s_state_i2c = state_i2c_stop;
                     }
                     break;
                 }
@@ -348,14 +356,22 @@ void sx8724_i2c_isr( void )
                 }
                 case state_i2c_stop:
                 {
-                    if( s_tx_available )
+                    SSP2CON2bits.PEN = 1;
+                    s_state_i2c = state_i2c_start;
+                    if( s_tx_available < ARRAY_SIZE(s_tx_buffer))
                     {
-                        start();
+                        s_state_i2c = state_i2c_start;
                     }
                     else
                     {
                         s_state_i2c = state_i2c_idle;
                     }
+                    break;
+                }
+                case state_i2c_start:
+                {
+                    SSP2CON2bits.SEN = 1;
+                    s_state_i2c = state_i2c_device_address;
                     break;
                 }
             }

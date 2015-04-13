@@ -30,10 +30,6 @@ struct dispatch_table_t
 };
 static dispatch_func_t s_pending_dispatch;
 
-// these macros help with packet construction
-#define PACKET(p,n)   protocol_##n##_t * p = &s_tx_packet_buffer.n
-#define CRC16(p)    (p)->crc = crc16(p,sizeof(*(p))-sizeof(protocol_crc_t))
-
 
 void cmd_init( void )
 {
@@ -42,10 +38,9 @@ void cmd_init( void )
 
 static void get_version( void )
 {
-    PACKET(p,version_response);
-    p->major = 0;
-    p->minor = 1;
-    CRC16(p);
+    s_tx_packet_buffer.version_response.major = 0;
+    s_tx_packet_buffer.version_response.minor = 1;
+    protocol_version_response_create(&s_tx_packet_buffer.version_response);
 }
 
 void cmd_process( void )
@@ -100,6 +95,7 @@ void cmd_process( void )
         // transmission buffer is available to be used
         s_tx_ndx = 0;
         s_pending_dispatch();
+        s_rx_ndx = 0;
         s_pending_dispatch = NULL;
         s_tx_ndx += uart_tx_buf( &s_p_tx[s_tx_ndx], s_tx_packet_buffer.hdr.length-s_tx_ndx );
     }

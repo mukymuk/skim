@@ -32,6 +32,7 @@ int main(int argc, char** argv)
     TRISAbits.TRISA4 = 1;
     OSCCON = 0b01110000;
     OSCTUNEbits.PLLEN = 1;
+    __delay_ms(2);
 
     tmr_init();
     uart_init();
@@ -42,14 +43,13 @@ int main(int argc, char** argv)
             
 	INTCONbits.PEIE = 1;
 	INTCONbits.GIE = 1;
-    __delay_ms(2);
     while(1)
     {
         //uart_putchar('7');
         ui_led_top_white(on);
         cmd_process();
         on = !on;
-        sleep();
+        //sleep();
     }
 }
 

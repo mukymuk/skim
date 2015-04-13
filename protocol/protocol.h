@@ -1,4 +1,6 @@
 
+#include "protocol_config.h"
+
 ////////////////////////////////////////////////////////////////////////////////
 // DATA TYPES
 
@@ -32,7 +34,9 @@ protocol_nodata_t;
 ////////////////////////////////////////////////////////////////////////////////
 // ID'S
 
-#define PROTOCOL_ID_VERSION    ((protocol_id_t)0)
+#define protocol_version_request_id    ((protocol_id_t)0)
+
+#define protocol_version_response_id   ((protocol_id_t)0x80)
 
 ////////////////////////////////////////////////////////////////////////////////
 // ACK/NAK PACKET
@@ -58,3 +62,19 @@ typedef struct _protocol_version_response_t
     protocol_crc_t                  crc;
 }
 protocol_version_response_t;
+
+#ifndef PROTOCOL_FUNCTION_DECL
+#define PROTOCOL_FUNCTION_DECL
+#endif
+
+#define PROTOCOL_CREATE_DECLARE(f)	void PROTOCOL_FUNCTION_DECL f##_create( f##_t *)
+
+PROTOCOL_CREATE_DECLARE(protocol_version_request);
+PROTOCOL_CREATE_DECLARE(protocol_version_response);
+
+typedef struct _protocol_dispatch_table_t
+{
+	protocol_id_t	id;
+	bool(*p_func)(const protocol_header_t*);
+}
+protocol_dispatch_table_t;

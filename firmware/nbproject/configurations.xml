@@ -12,6 +12,7 @@
       <itemPath>../protocol/protocol.h</itemPath>
       <itemPath>tmr.h</itemPath>
       <itemPath>../protocol/crc.h</itemPath>
+      <itemPath>protocol_config.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -28,6 +29,7 @@
       <itemPath>cmd.c</itemPath>
       <itemPath>tmr.c</itemPath>
       <itemPath>../protocol/crc.c</itemPath>
+      <itemPath>../protocol/protocol.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -146,6 +148,7 @@
                   value="Press to browse for a specific firmware version"/>
         <property key="ToolFirmwareOption.UseLatestFirmware" value="true"/>
         <property key="debugoptions.useswbreakpoints" value="true"/>
+        <property key="firmware.download.all" value="false"/>
         <property key="hwtoolclock.frcindebug" value="false"/>
         <property key="memories.aux" value="false"/>
         <property key="memories.bootflash" value="false"/>
