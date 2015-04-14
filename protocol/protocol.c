@@ -7,6 +7,8 @@
 
 PROTOCOL_CREATE(protocol_version_request);
 PROTOCOL_CREATE(protocol_version_response);
+PROTOCOL_CREATE(protocol_ack);
+PROTOCOL_CREATE(protocol_set_gain_offset);
 
 /*
 extern const protocol_dispatch_table_t * const g_protocol_dispatch_table;

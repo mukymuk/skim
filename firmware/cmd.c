@@ -3,11 +3,13 @@
 #include "cmd.h"
 #include "uart.h"
 #include "crc.h"
+#include "sx8724.h"
 
 union rx_packet_buffer_t
 {
     protocol_header_t               hdr;
     protocol_version_request_t      version_request;
+    protocol_set_gain_offset_t      set_gain_offset;
 };
 union rx_packet_buffer_t s_rx_packet_buffer;
 
@@ -15,6 +17,7 @@ union tx_packet_buffer_t
 {
     protocol_header_t               hdr;
     protocol_version_response_t     version_response;
+    protocol_ack_t                  ack;
 };
 union tx_packet_buffer_t s_tx_packet_buffer;
 
@@ -36,6 +39,14 @@ void cmd_init( void )
 }
 
 
+static void set_gain_offset( void )
+{
+    sx8724_gain( s_rx_packet_buffer.set_gain_offset.channel, s_rx_packet_buffer.set_gain_offset.gain );
+    sx8724_offset( s_rx_packet_buffer.set_gain_offset.channel, s_rx_packet_buffer.set_gain_offset.offset );
+    s_tx_packet_buffer.ack.code = 1;
+    protocol_ack_create(&s_tx_packet_buffer.ack);
+}
+
 static void get_version( void )
 {
     s_tx_packet_buffer.version_response.major = 0;
@@ -46,11 +57,12 @@ static void get_version( void )
 void cmd_process( void )
 {
     static uint8_t * const s_p_rx = (uint8_t*)&s_rx_packet_buffer;
-    static uint8_t * const s_p_rx = (uint8_t*)&s_rx_packet_buffer;
     
     static const struct dispatch_table_t s_dispatch_table[] =
     {
-        get_version     // PROTOCOL_ID_VERSION
+        get_version,     // protocol_version_request_id
+        set_gain_offset, // protocol_set_gain_offset_id
+        
     };
     static const uint8_t * const s_p_tx = (const uint8_t*)&s_tx_packet_buffer;
     bool tx_in_progress = s_tx_ndx < s_tx_packet_buffer.hdr.length;

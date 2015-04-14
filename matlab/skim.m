@@ -4,6 +4,18 @@ classdef skim < handle
         packet_buffer
     end
     methods
+        function code = set_gain_offset(obj, gain, offset)
+            [pb, req_size, resp_size] = calllib('skim','set_gain_offset', obj.packet_buffer, 0, 0 );
+            fwrite(obj.serial_port,obj.packet_buffer.Value(1:req_size), 'uint8' );
+            [ pb, count] = fread(obj.serial_port,double(resp_size));
+            if count == resp_size 
+                obj.packet_buffer.Value = pb;
+                [ret, pb, code] = calllib('skim','ack', obj.packet_buffer, 0 );
+            else 
+                code = -1;
+            end
+            
+        end
         function v = version(obj)
             [pb, req_size, resp_size] = calllib('skim','version_request', obj.packet_buffer, 0, 0 );
             fwrite(obj.serial_port,obj.packet_buffer.Value(1:req_size), 'uint8' );
